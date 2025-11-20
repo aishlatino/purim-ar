@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purim Magic Mirror</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Face API JS -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Henny+Penny&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #1a1a2e;
+            font-family: 'Fredoka', sans-serif;
+            overflow-x: hidden;
+        }
+        .magic-font {
+            font-family: 'Henny Penny', cursive;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: 4/3;
+            margin: 0 auto;
+            overflow: hidden;
+            border-radius: 1rem;
+            box-shadow: 0 0 20px #6b21a8;
+            background: #000;
+        }
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror effect to match video */
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Scrollbar for the grid */
+        .mask-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+        .mask-grid::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .mask-grid::-webkit-scrollbar-thumb {
+            background: #a855f7;
+            border-radius: 4px;
+        }
+        
+        .emoji-btn {
+            transition: all 0.2s;
+        }
+        .emoji-btn:hover {
+            transform: scale(1.1);
+            background: rgba(168, 85, 247, 0.3);
+        }
+        .emoji-btn.active {
+            background: #a855f7;
+            border-color: #d8b4fe;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #a855f7;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Configuration for all Masks (Pig removed)
+        const MASKS_LIST = [
+            // Jewish / Purim
+            { id: 'rabbi', emoji: '🕍', label: 'Rabbi', category: 'Purim' },
+            { id: 'queen', emoji: '👑', label: 'Queen', category: 'Purim' },
+            { id: 'king', emoji: '🤴', label: 'King', category: 'Purim' },
+            { id: 'mordechai', emoji: '🟦', label: 'Mordechai', category: 'Purim' }, 
+            { id: 'haman', emoji: '🔺', label: 'Haman', category: 'Purim' }, 
+            { id: 'clown', emoji: '🤡', label: 'Clown', category: 'Purim' },
+            
+            // Animals
+            { id: 'cat', emoji: '🐱', label: 'Cat', category: 'Animals' },
+            { id: 'dog', emoji: '🐶', label: 'Dog', category: 'Animals' },
+            { id: 'bunny', emoji: '🐰', label: 'Bunny', category: 'Animals' },
+            { id: 'lion', emoji: '🦁', label: 'Lion', category: 'Animals' },
+            { id: 'tiger', emoji: '🐯', label: 'Tiger', category: 'Animals' },
+            { id: 'fox', emoji: '🦊', label: 'Fox', category: 'Animals' },
+            { id: 'bear', emoji: '🐻', label: 'Bear', category: 'Animals' },
+            { id: 'panda', emoji: '🐼', label: 'Panda', category: 'Animals' },
+            { id: 'koala', emoji: '🐨', label: 'Koala', category: 'Animals' },
+            { id: 'mouse', emoji: '🐭', label: 'Mouse', category: 'Animals' },
+            { id: 'frog', emoji: '🐸', label: 'Frog', category: 'Animals' },
+            { id: 'unicorn', emoji: '🦄', label: 'Unicorn', category: 'Animals' },
+            
+            // Fantasy / Scary
+            { id: 'pirate', emoji: '🏴‍☠️', label: 'Pirate', category: 'Fantasy' },
+            { id: 'ninja', emoji: '🥷', label: 'Ninja', category: 'Fantasy' },
+            { id: 'witch', emoji: '🧙‍♀️', label: 'Witch', category: 'Fantasy' },
+            { id: 'wizard', emoji: '🧙‍♂️', label: 'Wizard', category: 'Fantasy' },
+            { id: 'vampire', emoji: '🧛', label: 'Vampire', category: 'Fantasy' },
+            { id: 'devil', emoji: '😈', label: 'Devil', category: 'Fantasy' },
+            { id: 'angel', emoji: '😇', label: 'Angel', category: 'Fantasy' },
+            { id: 'zombie', emoji: '🧟', label: 'Zombie', category: 'Fantasy' },
+            { id: 'alien', emoji: '👽', label: 'Alien', category: 'Fantasy' },
+            { id: 'robot', emoji: '🤖', label: 'Robot', category: 'Fantasy' },
+
+            // Professions / People
+            { id: 'police', emoji: '👮', label: 'Police', category: 'Jobs' },
+            { id: 'detective', emoji: '🕵️', label: 'Detective', category: 'Jobs' },
+            { id: 'doctor', emoji: '👨‍⚕️', label: 'Doctor', category: 'Jobs' },
+            { id: 'chef', emoji: '👨‍🍳', label: 'Chef', category: 'Jobs' },
+            { id: 'superhero', emoji: '🦸', label: 'Hero', category: 'Jobs' },
+            
+            // Accessories
+            { id: 'glasses', emoji: '😎', label: 'Cool', category: 'Accessories' },
+            { id: 'nerd', emoji: '🤓', label: 'Nerd', category: 'Accessories' },
+            { id: 'potter', emoji: '⚡', label: 'Potter', category: 'Accessories' },
+            { id: 'flower', emoji: '🌸', label: 'Flower', category: 'Accessories' },
+            { id: 'mustache', emoji: '🥸', label: 'Mustache', category: 'Accessories' },
+        ];
+
+        const App = () => {
+            const [isLoading, setIsLoading] = useState(true);
+            const [errorMsg, setErrorMsg] = useState(null);
+            const [loadingStatus, setLoadingStatus] = useState("Initializing Magic...");
+            const [selectedMaskId, setSelectedMaskId] = useState(null);
+            const [description, setDescription] = useState("Pick a costume!");
+            
+            const currentMaskRef = useRef(null); 
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const streamRef = useRef(null);
+            const requestRef = useRef(null);
+            const isModelsLoaded = useRef(false);
+
+            // Initialize Face API
+            useEffect(() => {
+                const init = async () => {
+                    try {
+                        if (typeof faceapi === 'undefined') {
+                            throw new Error("FaceAPI library failed to load.");
+                        }
+                        setLoadingStatus("Loading AI Models...");
+                        const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+                        await Promise.all([
+                            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                            faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+                        ]);
+                        isModelsLoaded.current = true;
+                        setLoadingStatus("Starting Camera...");
+                        startVideo();
+                    } catch (error) {
+                        console.error("Init error:", error);
+                        setErrorMsg(`Error: ${error.message}`);
+                        setIsLoading(false);
+                    }
+                };
+                init();
+                return () => {
+                    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+                    if (requestRef.current) cancelAnimationFrame(requestRef.current);
+                };
+            }, []);
+
+            const startVideo = () => {
+                navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                    .then((stream) => {
+                        if (videoRef.current) {
+                            videoRef.current.srcObject = stream;
+                            streamRef.current = stream;
+                            videoRef.current.play().catch(e => console.error("Play error:", e));
+                        }
+                    })
+                    .catch((err) => {
+                        console.error("Camera error:", err);
+                        setErrorMsg("Camera Access Denied.");
+                        setIsLoading(false);
+                    });
+            };
+
+            const handleVideoLoadedMetadata = () => {
+                if (isModelsLoaded.current) startTrackingLoop();
+            };
+
+            const startTrackingLoop = () => {
+                setIsLoading(false);
+                const canvas = canvasRef.current;
+                const video = videoRef.current;
+                if (!canvas || !video) return;
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    setTimeout(startTrackingLoop, 100);
+                    return;
+                }
+                const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                faceapi.matchDimensions(canvas, displaySize);
+
+                const renderLoop = async () => {
+                    if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) {
+                        requestRef.current = requestAnimationFrame(renderLoop);
+                        return;
+                    }
+                    try {
+                        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 });
+                        const detection = await faceapi.detectSingleFace(video, options).withFaceLandmarks(true);
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        if (detection) {
+                            const resizedDetection = faceapi.resizeResults(detection, displaySize);
+                            const landmarks = resizedDetection.landmarks;
+                            const activeMask = currentMaskRef.current;
+                            if (activeMask) {
+                                drawMask(ctx, landmarks, activeMask);
+                            } else {
+                                drawTrackingPreview(ctx, landmarks);
+                            }
+                        }
+                    } catch (err) { /* silent */ }
+                    requestRef.current = requestAnimationFrame(renderLoop);
+                };
+                renderLoop();
+            };
+
+            // --- DRAWING PRIMITIVES (REPLACING EMOJIS) ---
+
+            // Helper for eyes/tracking dots
+            const drawTrackingPreview = (ctx, landmarks) => {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                const nose = landmarks.getNose();
+                ctx.beginPath(); ctx.arc(nose[3].x, nose[3].y, 3, 0, 2 * Math.PI); ctx.fill();
+            };
+
+            const drawBeard = (ctx, jaw, mouth, color = '#333') => {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(jaw[0].x, jaw[0].y - 20);
+                for(let i=0; i<17; i++) ctx.lineTo(jaw[i].x, jaw[i].y);
+                ctx.quadraticCurveTo(jaw[8].x, jaw[8].y - 100, jaw[0].x, jaw[0].y - 20);
+                ctx.fill();
+                
+                // Mouth Opening
+                ctx.globalCompositeOperation = 'destination-out';
+                const mouthCenter = mouth[14] || mouth[6]; 
+                const mouthWidth = Math.abs(mouth[0].x - mouth[6].x);
+                const mouthHeight = Math.abs(mouth[13].y - mouth[19].y);
+                if (mouthCenter && mouthWidth) {
+                    ctx.beginPath();
+                    ctx.ellipse(mouthCenter.x, mouthCenter.y - mouthHeight*0.2, mouthWidth * 0.55, mouthHeight * 0.7, 0, 0, Math.PI*2);
+                    ctx.fill();
+                }
+                ctx.globalCompositeOperation = 'source-over';
+            };
+
+            const drawCrown = (ctx, brows, faceCenter, color = '#FFD700', jewels = true) => {
+                const width = Math.abs(brows[0].x - brows[4].x) * 2.5;
+                const leftX = faceCenter.x - width/2;
+                const baseY = brows[0].y - width * 0.3;
+                
+                ctx.fillStyle = color;
+                ctx.strokeStyle = '#DAA520'; // Darker gold outline
+                ctx.lineWidth = 3;
+                
+                ctx.beginPath();
+                ctx.moveTo(leftX, baseY);
+                ctx.lineTo(leftX, baseY - width * 0.4); // Left side
+                ctx.lineTo(leftX + width*0.25, baseY - width * 0.2); // Dip
+                ctx.lineTo(faceCenter.x, baseY - width * 0.6); // Center Peak
+                ctx.lineTo(leftX + width*0.75, baseY - width * 0.2); // Dip
+                ctx.lineTo(leftX + width, baseY - width * 0.4); // Right side
+                ctx.lineTo(leftX + width, baseY); // Bottom Right
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                if (jewels) {
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath(); ctx.arc(faceCenter.x, baseY - width*0.2, 5, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'blue';
+                    ctx.beginPath(); ctx.arc(leftX + width*0.25, baseY - width*0.15, 4, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(leftX + width*0.75, baseY - width*0.15, 4, 0, Math.PI*2); ctx.fill();
+                }
+            };
+
+            const drawHat = (ctx, brows, center, type, color) => {
+                const width = Math.abs(brows[0].x - brows[4].x) * 3;
+                const y = brows[0].y - width * 0.4;
+                
+                if (type === 'triangle') { // Haman / Witch / Wizard
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.moveTo(center.x - width * 0.5, y + 20);
+                    ctx.lineTo(center.x + width * 0.5, y + 20);
+                    ctx.lineTo(center.x, y - width * 0.6);
+                    ctx.fill();
+                } else if (type === 'tophat') { // Rabbi
+                    ctx.fillStyle = '#111';
+                    // Brim
+                    ctx.beginPath(); ctx.ellipse(center.x, y + 20, width * 0.6, width * 0.1, 0, 0, Math.PI*2); ctx.fill();
+                    // Top
+                    ctx.fillRect(center.x - width * 0.3, y - width * 0.5, width * 0.6, width * 0.6);
+                } else if (type === 'cap') { // Police / Detective
+                    ctx.fillStyle = color;
+                    // Brim
+                    ctx.beginPath(); ctx.moveTo(center.x - width*0.4, y + 30); ctx.quadraticCurveTo(center.x, y-10, center.x + width*0.4, y + 30); ctx.fill();
+                    // Top
+                    ctx.fillRect(center.x - width*0.35, y - width*0.3, width*0.7, width*0.4);
+                    // Badge
+                    ctx.fillStyle = 'gold';
+                    ctx.beginPath(); ctx.arc(center.x, y - width*0.15, 8, 0, Math.PI*2); ctx.fill();
+                } else if (type === 'chef') {
+                    ctx.fillStyle = 'white';
+                    ctx.strokeStyle = '#ddd';
+                    ctx.lineWidth = 2;
+                    // Band
+                    ctx.fillRect(center.x - width*0.35, y, width*0.7, 40);
+                    ctx.strokeRect(center.x - width*0.35, y, width*0.7, 40);
+                    // Puffy Top
+                    ctx.beginPath();
+                    ctx.arc(center.x - 30, y-10, 30, 0, Math.PI*2);
+                    ctx.arc(center.x, y-30, 40, 0, Math.PI*2);
+                    ctx.arc(center.x + 30, y-10, 30, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            };
+
+            const drawHalo = (ctx, brows, center) => {
+                const width = Math.abs(brows[0].x - brows[4].x) * 2.5;
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 5;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'gold';
+                ctx.beginPath();
+                ctx.ellipse(center.x, brows[0].y - width*0.5, width*0.5, width*0.15, 0, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            };
+
+            const drawHorns = (ctx, brows, center, color) => {
+                const width = Math.abs(brows[0].x - brows[4].x) * 2;
+                ctx.fillStyle = color;
+                // Left Horn
+                ctx.beginPath();
+                ctx.moveTo(brows[0].x + 10, brows[0].y - 20);
+                ctx.lineTo(brows[0].x - 20, brows[0].y - width*0.4);
+                ctx.lineTo(brows[0].x - 30, brows[0].y - 10);
+                ctx.fill();
+                // Right Horn
+                ctx.beginPath();
+                ctx.moveTo(brows[4].x - 10, brows[4].y - 20);
+                ctx.lineTo(brows[4].x + 20, brows[4].y - width*0.4);
+                ctx.lineTo(brows[4].x + 30, brows[4].y - 10);
+                ctx.fill();
+            };
+
+             const drawUnicornHorn = (ctx, brows, center) => {
+                const width = Math.abs(brows[0].x - brows[4].x);
+                ctx.fillStyle = 'white'; // Base
+                ctx.beginPath();
+                ctx.moveTo(center.x - 15, brows[0].y - 20);
+                ctx.lineTo(center.x, brows[0].y - width * 3); // Tip
+                ctx.lineTo(center.x + 15, brows[0].y - 20);
+                ctx.fill();
+                // Spirals
+                ctx.strokeStyle = 'pink';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(center.x - 12, brows[0].y - 40); ctx.lineTo(center.x + 12, brows[0].y - 50);
+                ctx.moveTo(center.x - 10, brows[0].y - 70); ctx.lineTo(center.x + 10, brows[0].y - 80);
+                ctx.stroke();
+            };
+
+            // --- MAIN RENDERER ---
+            const drawMask = (ctx, landmarks, maskId) => {
+                const jaw = landmarks.getJawOutline();
+                const nose = landmarks.getNose();
+                const mouth = landmarks.getMouth();
+                const leftEye = landmarks.getLeftEye();
+                const rightEye = landmarks.getRightEye();
+                const leftEyeBrow = landmarks.getLeftEyeBrow();
+                const rightEyeBrow = landmarks.getRightEyeBrow();
+
+                const faceWidth = Math.abs(jaw[0].x - jaw[16].x);
+                const faceCenter = nose[3];
+                
+                ctx.save();
+
+                // --- JEWISH THEMES ---
+                if (maskId === 'rabbi') {
+                    drawBeard(ctx, jaw, mouth, '#e0e0e0'); 
+                    drawHat(ctx, leftEyeBrow, faceCenter, 'tophat');
+                }
+                else if (maskId === 'queen' || maskId === 'king') {
+                    drawCrown(ctx, leftEyeBrow, faceCenter, '#FFD700');
+                    if (maskId === 'king') drawBeard(ctx, jaw, mouth, '#333');
+                }
+                else if (maskId === 'mordechai') {
+                    drawBeard(ctx, jaw, mouth, '#555');
+                    // Blue Turban
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.beginPath(); ctx.arc(faceCenter.x, leftEyeBrow[0].y - 50, faceWidth * 0.45, Math.PI, 0); ctx.fill();
+                    // Jewel in center
+                    ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.arc(faceCenter.x, leftEyeBrow[0].y - 50, 10, 0, Math.PI*2); ctx.fill();
+                }
+                else if (maskId === 'haman') {
+                    drawBeard(ctx, jaw, mouth, '#111');
+                    drawHat(ctx, leftEyeBrow, faceCenter, 'triangle', '#333');
+                }
+                else if (maskId === 'clown') {
+                    // Face paint
+                    ctx.fillStyle = 'white'; ctx.globalAlpha = 0.7;
+                    ctx.beginPath(); ctx.ellipse(leftEye[0].x, leftEye[0].y, faceWidth*0.15, faceWidth*0.2, 0,0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.ellipse(rightEye[3].x, rightEye[3].y, faceWidth*0.15, faceWidth*0.2, 0,0,Math.PI*2); ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                    // Nose
+                    ctx.fillStyle = 'red'; ctx.shadowBlur = 20; ctx.shadowColor = 'red';
+                    ctx.beginPath(); ctx.arc(nose[3].x, nose[3].y, faceWidth * 0.15, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+                    // Smile
+                    ctx.strokeStyle = '#d90429'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+                    ctx.beginPath(); ctx.moveTo(mouth[0].x - 10, mouth[0].y); ctx.quadraticCurveTo(mouth[6].x, mouth[6].y + faceWidth*0.2, mouth[6].x + 10, mouth[6].y); ctx.stroke();
+                    // Puffy Hair (Drawn circles)
+                    ctx.fillStyle = '#ef4444'; // Red hair left
+                    ctx.beginPath(); ctx.arc(jaw[0].x - 20, leftEye[0].y - 20, 30, 0, Math.PI*2); ctx.arc(jaw[0].x - 30, leftEye[0].y + 10, 30, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#3b82f6'; // Blue hair right
+                    ctx.beginPath(); ctx.arc(jaw[16].x + 20, rightEye[3].y - 20, 30, 0, Math.PI*2); ctx.arc(jaw[16].x + 30, rightEye[3].y + 10, 30, 0, Math.PI*2); ctx.fill();
+                }
+
+                // --- ANIMALS ---
+                else if (['cat', 'dog', 'bunny', 'fox', 'wolf', 'bear', 'panda', 'koala', 'mouse', 'lion', 'tiger', 'frog'].includes(maskId)) {
+                    const earColor = maskId === 'cat' ? '#333' : maskId === 'frog' ? '#4ade80' : maskId === 'lion' ? '#DAA520' : maskId === 'mouse' ? '#9ca3af' : '#8B4513';
+                    
+                    // Frog Eyes
+                    if (maskId === 'frog') {
+                        ctx.fillStyle = '#4ade80';
+                        ctx.beginPath(); ctx.arc(leftEyeBrow[1].x, leftEyeBrow[1].y - 30, 25, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(rightEyeBrow[3].x, rightEyeBrow[3].y - 30, 25, 0, Math.PI*2); ctx.fill();
+                        ctx.fillStyle = 'black'; // Pupils
+                        ctx.beginPath(); ctx.arc(leftEyeBrow[1].x, leftEyeBrow[1].y - 30, 10, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(rightEyeBrow[3].x, rightEyeBrow[3].y - 30, 10, 0, Math.PI*2); ctx.fill();
+                    } 
+                    // Bunny Ears
+                    else if (maskId === 'bunny') {
+                        ctx.fillStyle = 'white'; ctx.strokeStyle = 'pink'; ctx.lineWidth = 8;
+                        ctx.beginPath(); ctx.ellipse(leftEyeBrow[1].x - 10, leftEyeBrow[1].y - 100, 20, 80, -0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                        ctx.beginPath(); ctx.ellipse(rightEyeBrow[3].x + 10, rightEyeBrow[3].y - 100, 20, 80, 0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    } 
+                    // Mouse/Bear Ears (Round)
+                    else if (['mouse', 'bear', 'panda', 'koala'].includes(maskId)) {
+                        ctx.fillStyle = earColor;
+                        ctx.beginPath(); ctx.arc(leftEyeBrow[0].x - 20, leftEyeBrow[0].y - 40, 30, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(rightEyeBrow[4].x + 20, rightEyeBrow[4].y - 40, 30, 0, Math.PI*2); ctx.fill();
+                        if (maskId === 'panda') { // Eye patches
+                            ctx.fillStyle = '#111'; ctx.globalAlpha = 0.6;
+                            ctx.beginPath(); ctx.ellipse(leftEye[0].x, leftEye[0].y, 25, 35, -0.2, 0, Math.PI*2); ctx.fill();
+                            ctx.beginPath(); ctx.ellipse(rightEye[3].x, rightEye[3].y, 25, 35, 0.2, 0, Math.PI*2); ctx.fill();
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                    // Pointy Ears (Cat, Dog, Fox, Wolf)
+                    else {
+                        ctx.fillStyle = earColor;
+                        ctx.beginPath(); ctx.moveTo(leftEyeBrow[0].x, leftEyeBrow[0].y); ctx.lineTo(leftEyeBrow[0].x - 40, leftEyeBrow[0].y - 90); ctx.lineTo(faceCenter.x, leftEyeBrow[4].y); ctx.fill();
+                        ctx.beginPath(); ctx.moveTo(rightEyeBrow[4].x, rightEyeBrow[4].y); ctx.lineTo(rightEyeBrow[4].x + 40, rightEyeBrow[4].y - 90); ctx.lineTo(faceCenter.x, rightEyeBrow[0].y); ctx.fill();
+                    }
+
+                    // Nose & Whiskers
+                    ctx.fillStyle = maskId === 'frog' ? '#22543d' : 'black';
+                    ctx.beginPath(); ctx.arc(nose[3].x, nose[3].y, 12, 0, Math.PI*2); ctx.fill();
+                    if (!['frog'].includes(maskId)) {
+                        ctx.strokeStyle = 'white'; ctx.lineWidth = 2;
+                        ctx.beginPath(); ctx.moveTo(nose[3].x - 10, nose[3].y); ctx.lineTo(jaw[0].x, jaw[2].y); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(nose[3].x + 10, nose[3].y); ctx.lineTo(jaw[16].x, jaw[14].y); ctx.stroke();
+                    }
+                    
+                    // Lion Mane
+                    if (maskId === 'lion') {
+                        ctx.strokeStyle = '#DAA520'; ctx.lineWidth = 40; ctx.globalAlpha = 0.4;
+                        ctx.beginPath(); ctx.arc(faceCenter.x, faceCenter.y, faceWidth*0.9, 0, Math.PI*2); ctx.stroke(); ctx.globalAlpha = 1.0;
+                    }
+                }
+                else if (maskId === 'unicorn') {
+                     drawUnicornHorn(ctx, leftEyeBrow, faceCenter);
+                }
+
+                // --- FANTASY ---
+                else if (maskId === 'pirate') {
+                    ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(leftEye[0].x, leftEye[0].y, 25, 0, Math.PI*2); ctx.fill(); // Patch
+                    ctx.strokeStyle = 'black'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(jaw[0].x, jaw[0].y-50); ctx.lineTo(leftEye[0].x, leftEye[0].y); ctx.stroke();
+                    ctx.fillStyle = '#cc0000'; ctx.beginPath(); ctx.moveTo(jaw[0].x, leftEyeBrow[0].y-40); ctx.quadraticCurveTo(faceCenter.x, leftEyeBrow[0].y-100, jaw[16].x, rightEyeBrow[4].y-40); ctx.lineTo(jaw[16].x, rightEyeBrow[4].y-100); ctx.lineTo(jaw[0].x, leftEyeBrow[0].y-100); ctx.fill(); // Bandana
+                }
+                else if (maskId === 'ninja') {
+                     ctx.fillStyle = '#111'; ctx.fillRect(jaw[0].x, leftEyeBrow[0].y - 30, faceWidth, 40); // Headband
+                     ctx.beginPath(); ctx.moveTo(jaw[0].x, leftEye[0].y+30); ctx.lineTo(jaw[16].x, rightEye[3].y+30); ctx.lineTo(jaw[8].x, jaw[8].y+50); ctx.fill(); // Mask
+                }
+                else if (maskId === 'witch' || maskId === 'wizard') {
+                    if (maskId === 'witch') { // Green skin tint
+                        ctx.fillStyle = 'rgba(50, 205, 50, 0.2)'; ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.55, faceWidth*0.75, 0, 0, Math.PI*2); ctx.fill();
+                    }
+                    drawHat(ctx, leftEyeBrow, faceCenter, 'triangle', maskId === 'wizard' ? '#4b0082' : '#111');
+                }
+                else if (maskId === 'vampire') {
+                    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.6, faceWidth*0.8, 0,0,Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'white'; // Fangs
+                    ctx.beginPath(); ctx.moveTo(mouth[0].x+10, mouth[0].y); ctx.lineTo(mouth[0].x+15, mouth[0].y+25); ctx.lineTo(mouth[0].x+20, mouth[0].y); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(mouth[6].x-10, mouth[6].y); ctx.lineTo(mouth[6].x-15, mouth[6].y+25); ctx.lineTo(mouth[6].x-20, mouth[6].y); ctx.fill();
+                }
+                else if (maskId === 'devil') {
+                    ctx.fillStyle = 'rgba(255,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.6, faceWidth*0.8, 0,0,Math.PI*2); ctx.fill();
+                    drawHorns(ctx, leftEyeBrow, faceCenter, 'red');
+                }
+                else if (maskId === 'dragon') {
+                    ctx.fillStyle = 'rgba(0,200,0,0.2)'; ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.6, faceWidth*0.8, 0,0,Math.PI*2); ctx.fill();
+                    drawHorns(ctx, leftEyeBrow, faceCenter, 'green');
+                }
+                else if (maskId === 'angel') {
+                    drawHalo(ctx, leftEyeBrow, faceCenter);
+                }
+                else if (maskId === 'robot') {
+                     ctx.strokeStyle = 'cyan'; ctx.lineWidth=2; ctx.strokeRect(leftEye[0].x-20, leftEye[0].y-20, 60, 40); ctx.strokeRect(rightEye[0].x-10, rightEye[0].y-20, 60, 40);
+                }
+                else if (maskId === 'alien') {
+                    ctx.fillStyle = 'rgba(100, 255, 100, 0.4)'; // Green Skin
+                    ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.5, faceWidth*0.7, 0, 0, Math.PI*2); ctx.fill();
+                    // Big Black Eyes
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath(); ctx.ellipse(leftEye[0].x, leftEye[0].y, 20, 35, -0.3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.ellipse(rightEye[3].x, rightEye[3].y, 20, 35, 0.3, 0, Math.PI*2); ctx.fill();
+                }
+                else if (maskId === 'zombie') {
+                    ctx.fillStyle = 'rgba(100, 120, 100, 0.5)'; // Grey/Green Skin
+                    ctx.beginPath(); ctx.ellipse(faceCenter.x, faceCenter.y, faceWidth*0.55, faceWidth*0.75, 0, 0, Math.PI*2); ctx.fill();
+                    // Dark circles
+                    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                    ctx.beginPath(); ctx.arc(leftEye[0].x, leftEye[0].y, 30, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(rightEye[3].x, rightEye[3].y, 30, 0, Math.PI*2); ctx.fill();
+                }
+
+                // --- JOBS ---
+                else if (maskId === 'police' || maskId === 'detective') {
+                    drawHat(ctx, leftEyeBrow, faceCenter, 'cap', maskId === 'police' ? '#1e3a8a' : '#78350f');
+                }
+                else if (maskId === 'chef') {
+                    drawHat(ctx, leftEyeBrow, faceCenter, 'chef', 'white');
+                    ctx.fillStyle = '#fecaca'; // Rosy cheeks
+                    ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(jaw[2].x, jaw[2].y, 15, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(jaw[14].x, jaw[14].y, 15, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1.0;
+                }
+                else if (maskId === 'doctor') {
+                     ctx.fillStyle = '#4fd1c5'; ctx.fillRect(jaw[0].x, leftEyeBrow[0].y - 40, faceWidth, 50); // Cap
+                     // Head Mirror
+                     ctx.fillStyle = '#silver'; ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+                     ctx.beginPath(); ctx.arc(faceCenter.x, leftEyeBrow[0].y - 30, 15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                }
+                else if (maskId === 'superhero') {
+                    ctx.fillStyle = '#e11d48'; 
+                    ctx.beginPath(); ctx.moveTo(jaw[0].x, leftEye[1].y); ctx.quadraticCurveTo(faceCenter.x, leftEye[1].y+20, jaw[16].x, rightEye[1].y); ctx.lineTo(jaw[16].x, rightEye[1].y-40); ctx.quadraticCurveTo(faceCenter.x, leftEye[1].y-60, jaw[0].x, leftEye[1].y-40); ctx.fill();
+                }
+
+                // --- ACCESSORIES ---
+                else if (maskId === 'glasses' || maskId === 'nerd' || maskId === 'potter') {
+                    ctx.strokeStyle = 'black'; ctx.lineWidth = maskId === 'nerd' ? 5 : 3;
+                    ctx.fillStyle = maskId === 'glasses' ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0)';
+                    // Left
+                    ctx.beginPath(); ctx.arc(leftEye[0].x, leftEye[0].y, 25, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    // Right
+                    ctx.beginPath(); ctx.arc(rightEye[3].x, rightEye[3].y, 25, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    // Bridge
+                    ctx.beginPath(); ctx.moveTo(leftEye[0].x + 25, leftEye[0].y); ctx.lineTo(rightEye[3].x - 25, rightEye[3].y); ctx.stroke();
+                    if (maskId === 'potter') {
+                        ctx.strokeStyle = '#8B0000'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(faceCenter.x, leftEyeBrow[0].y-20); ctx.lineTo(faceCenter.x+10, leftEyeBrow[0].y-10); ctx.lineTo(faceCenter.x+5, leftEyeBrow[0].y); ctx.stroke();
+                    }
+                }
+                else if (maskId === 'mustache') {
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath();
+                    ctx.moveTo(nose[3].x, nose[3].y + 5);
+                    ctx.quadraticCurveTo(mouth[0].x - 10, nose[3].y + 10, mouth[0].x - 20, nose[3].y + 20); // Left curl
+                    ctx.quadraticCurveTo(mouth[0].x, nose[3].y + 15, nose[3].x, nose[3].y + 15); // Left bottom
+                    ctx.quadraticCurveTo(mouth[6].x, nose[3].y + 15, mouth[6].x + 20, nose[3].y + 20); // Right curl
+                    ctx.quadraticCurveTo(mouth[6].x + 10, nose[3].y + 10, nose[3].x, nose[3].y + 5); // Right top
+                    ctx.fill();
+                }
+                else if (maskId === 'flower') {
+                    // Flower crown drawn with circles
+                    const colors = ['#f472b6', '#facc15', '#60a5fa'];
+                    [jaw[0], leftEyeBrow[0], leftEyeBrow[4], rightEyeBrow[0], rightEyeBrow[4], jaw[16]].forEach((pt, i) => {
+                         ctx.fillStyle = colors[i % 3];
+                         ctx.beginPath(); ctx.arc(pt.x, pt.y - 20, 15, 0, Math.PI*2); ctx.fill();
+                         ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(pt.x, pt.y - 20, 5, 0, Math.PI*2); ctx.fill();
+                    });
+                }
+
+                ctx.restore();
+            };
+
+            const takeSnapshot = () => {
+                const video = videoRef.current;
+                const arCanvas = canvasRef.current;
+                if (!video || !arCanvas) return;
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = video.videoWidth;
+                captureCanvas.height = video.videoHeight;
+                const ctx = captureCanvas.getContext('2d');
+                ctx.save();
+                ctx.translate(captureCanvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+                ctx.drawImage(arCanvas, 0, 0, captureCanvas.width, captureCanvas.height);
+                ctx.restore();
+                ctx.font = "bold 30px Fredoka";
+                ctx.fillStyle = "#a855f7"; 
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 3;
+                ctx.textAlign = "right";
+                ctx.strokeText("Purim AR ✨", captureCanvas.width - 20, captureCanvas.height - 20);
+                ctx.fillText("Purim AR ✨", captureCanvas.width - 20, captureCanvas.height - 20);
+                const link = document.createElement('a');
+                link.download = `purim-mask-${Date.now()}.jpg`;
+                link.href = captureCanvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+            };
+
+            const handleSelectMask = (mask) => {
+                setSelectedMaskId(mask.id);
+                currentMaskRef.current = mask.id;
+                setDescription(`Transforming into: ${mask.label}`);
+            };
+
+            const handleClear = () => {
+                setSelectedMaskId(null);
+                currentMaskRef.current = null;
+                setDescription("Mask removed.");
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center p-4 pb-32 text-white">
+                    <header className="text-center mb-4">
+                        <h1 className="text-4xl magic-font text-purple-400 drop-shadow-lg mb-1">Purim Magic Mirror</h1>
+                    </header>
+                    <div className="canvas-container mb-4">
+                        {isLoading && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black bg-opacity-90 p-4 text-center">
+                                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-purple-500 border-solid mb-4"></div>
+                                <p className="text-xl animate-pulse text-purple-200">{loadingStatus}</p>
+                            </div>
+                        )}
+                        <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={handleVideoLoadedMetadata} />
+                        <canvas ref={canvasRef} />
+                        {!isLoading && (
+                            <button onClick={takeSnapshot} className="absolute top-4 right-4 bg-white text-purple-900 hover:bg-gray-200 font-bold py-2 px-4 rounded-full shadow-lg transition-transform hover:scale-110 flex items-center gap-2 z-10">
+                                📸 Save
+                            </button>
+                        )}
+                    </div>
+                    <div className="w-full max-w-2xl">
+                        <div className="glass-panel p-4 rounded-xl border-2 border-purple-500/20">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-purple-300 font-bold text-lg">🎭 Choose a Costume</h3>
+                                {selectedMaskId && (
+                                    <button onClick={handleClear} className="text-red-400 hover:bg-red-900/20 px-3 py-1 rounded text-sm border border-red-900/50">✕ Remove</button>
+                                )}
+                            </div>
+                            <div className="mask-grid h-64 overflow-y-auto pr-2 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                                {MASKS_LIST.map(mask => (
+                                    <button
+                                        key={mask.id}
+                                        onClick={() => handleSelectMask(mask)}
+                                        className={`emoji-btn flex flex-col items-center justify-center p-2 rounded-lg border border-gray-700 bg-gray-800/50 ${selectedMaskId === mask.id ? 'active' : ''}`}
+                                    >
+                                        <span className="text-3xl mb-1">{mask.emoji}</span>
+                                        <span className="text-[10px] text-gray-300 leading-tight text-center">{mask.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-center text-gray-400 text-sm mt-3 italic">{description}</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
